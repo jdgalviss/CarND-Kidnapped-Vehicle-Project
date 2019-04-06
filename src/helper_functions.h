@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 #include "map.h"
+#include <random> // Need this for sampling from distributions
 
 // for portability of M_PI (Vis Studio, MinGW, etc.)
 #ifndef M_PI
