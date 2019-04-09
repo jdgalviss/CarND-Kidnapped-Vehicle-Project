@@ -24,7 +24,7 @@ using std::vector;
 
 void ParticleFilter::init(double x, double y, double theta, double std[])
 {
-  num_particles = 100; // TODO: Set the number of particles
+  num_particles = 10; // TODO: Set the number of particles
   /**
    * TODO: Set the number of particles. Initialize all particles to 
    *   first position (based on estimates of x, y, theta and their uncertainties
@@ -45,8 +45,8 @@ void ParticleFilter::init(double x, double y, double theta, double std[])
   normal_distribution<double> dist_y(y, std_y);
   normal_distribution<double> dist_theta(theta, std_theta);
   // Print your initial values to the terminal.
-  std::cout << "Initial value " << x << " " << y << " " 
-              << theta << std::endl;
+  std::cout << "Initial value " << x << " " << y << " "
+            << theta << std::endl;
   for (int j = 0; j < num_particles; ++j)
   {
     double sample_x, sample_y, sample_theta;
@@ -63,7 +63,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[])
     a_particle.id = j;
     a_particle.weight = 1.0;
     // Print your samples to the terminal.
-    std::cout << "Sample " << j + 1 << " " << a_particle.x << " " << a_particle.y << " " 
+    std::cout << "Sample " << j + 1 << " " << a_particle.x << " " << a_particle.y << " "
               << a_particle.theta << std::endl;
     particles.push_back(a_particle);
   }
@@ -85,9 +85,17 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
   for (int j = 0; j < num_particles; ++j)
   {
     double prev_theta = particles.at(j).theta;
-    theta_f = particles.at(j).theta + yaw_rate*delta_t;
-    x_f = particles.at(j).x + velocity/yaw_rate * (sin(theta_f)-sin(prev_theta));
-    y_f = particles.at(j).y + velocity/yaw_rate * (cos(prev_theta)-cos(theta_f));
+    theta_f = particles.at(j).theta + yaw_rate * delta_t;
+    if (yaw_rate != 0.0f)
+    {
+      x_f = particles.at(j).x + velocity / yaw_rate * (sin(theta_f) - sin(prev_theta));
+      y_f = particles.at(j).y + velocity / yaw_rate * (cos(prev_theta) - cos(theta_f));
+    }
+    else
+    {
+      x_f = particles.at(j).x + velocity * delta_t * cos(theta_f);
+      y_f = particles.at(j).y + velocity * delta_t * sin(theta_f);
+    }
     normal_distribution<double> dist_x(x_f, std_pos[0]);
     normal_distribution<double> dist_y(y_f, std_pos[1]);
     normal_distribution<double> dist_theta(theta_f, std_pos[2]);
@@ -95,13 +103,9 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
     particles.at(j).y = dist_y(gen);
     particles.at(j).theta = dist_theta(gen);
   }
-  
-
-  
-
 }
 
-void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
+vector<LandmarkObs> ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
                                      vector<LandmarkObs> &observations)
 {
   /**
@@ -112,6 +116,25 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
    *   probably find it useful to implement this method and use it as a helper 
    *   during the updateWeights phase.
    */
+  vector<double> distance_to_landmark(observations.size(), 10000);
+  vector<LandmarkObs> seen_landmarks(observations.size());
+  for (unsigned int i = 0; i < predicted.size(); ++i)
+  {
+    for (unsigned int j = 0; j < observations.size(); ++j)
+    {
+      double current_dist = sqrt(pow(observations.at(j).x - predicted.at(i).x, 2.0f) + pow(observations.at(j).y - predicted.at(i).y, 2.0f));
+      if ((current_dist < distance_to_landmark.at(j)))
+      {
+        distance_to_landmark.at(j) = current_dist;
+        observations.at(j).id = predicted.at(i).id;
+        seen_landmarks.at(j) = predicted.at(i);
+      }
+    }
+  }
+  //for (unsigned int j = 0; j < observations.size(); ++j){
+  //  std::cout << j << ")  obsX: "<< observations.at(j).x << " landX:  "<< seen_landmarks.at(j).x << "obsY: "<< observations.at(j).y << " landY:  "<< seen_landmarks.at(j).y  << std::endl;
+  //}
+  return seen_landmarks;
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
@@ -131,6 +154,44 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
    *   and the following is a good resource for the actual equation to implement
    *   (look at equation 3.33) http://planning.cs.uiuc.edu/node99.html
    */
+
+  //Landmarks vector
+  vector<LandmarkObs> landmarks;
+  for (unsigned int j = 0; j < map_landmarks.landmark_list.size(); ++j){
+    LandmarkObs landmark;
+    landmark.id = map_landmarks.landmark_list.at(j).id_i;
+    landmark.x = map_landmarks.landmark_list.at(j).x_f;
+    landmark.y = map_landmarks.landmark_list.at(j).y_f;
+    landmarks.push_back(landmark);
+  }
+
+  vector<LandmarkObs> map_observations;
+  for(unsigned int i = 0; i < particles.size(); ++i){ 
+    //std::cout << "Particle "<< i << std::endl;
+    //Transform observations to map global frame
+    LandmarkObs obs_map;
+    map_observations.clear();
+    for (unsigned int j = 0; j < observations.size(); ++j){
+      obs_map.x = observations.at(j).x * cos(particles.at(i).theta) - observations.at(j).y * sin(particles.at(i).theta) + particles.at(i).x;
+      obs_map.y = observations.at(j).x * sin(particles.at(i).theta) + observations.at(j).y * cos(particles.at(i).theta) + particles.at(i).y;
+      obs_map.id = 0;
+      map_observations.push_back(obs_map);
+    }
+    
+    //Associate observations to measurements
+    vector<LandmarkObs> seen_landmarks = dataAssociation(landmarks, map_observations);
+    // Calculate probability for each measurement using multivariate gaussian distribution
+    particles.at(i).weight = 1.0f;
+    for (unsigned int j = 0; j < map_observations.size(); ++j){
+      double p1 = pow(map_observations.at(j).x - seen_landmarks.at(j).x, 2.0f) / (2*pow(std_landmark[0],2.0f));
+      double p2 = pow(map_observations.at(j).y - seen_landmarks.at(j).y, 2.0f) / (2*pow(std_landmark[1],2.0f));
+      double p_x_y = exp(-(p1 + p2)) / (2*std_landmark[0]*std_landmark[1]);
+      
+      particles.at(i).weight = particles.at(i).weight*p_x_y;
+      //std::cout << "Observation "<< j << " weight " << p_x_y << std::endl;
+    }
+    std::cout << "Particle "<< i << " weight "<< particles.at(i).weight << std::endl;
+  }
 }
 
 void ParticleFilter::resample()

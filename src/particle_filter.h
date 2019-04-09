@@ -63,7 +63,7 @@ class ParticleFilter {
    * @param predicted Vector of predicted landmark observations
    * @param observations Vector of landmark observations
    */
-  void dataAssociation(std::vector<LandmarkObs> predicted, 
+  std::vector<LandmarkObs> dataAssociation(std::vector<LandmarkObs> predicted, 
                        std::vector<LandmarkObs>& observations);
   
   /**

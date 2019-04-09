@@ -34,6 +34,7 @@ int main() {
 
   // GPS measurement uncertainty [x [m], y [m], theta [rad]]
   double sigma_pos [3] = {0.3, 0.3, 0.01};
+  //double sigma_pos [3] = {0.0, 0.0, 0.0};
   // Landmark measurement uncertainty [x [m], y [m]]
   double sigma_landmark [2] = {0.3, 0.3};
 
@@ -100,7 +101,7 @@ int main() {
           std::istream_iterator<float>(),
           std::back_inserter(y_sense));
 
-          for (int i = 0; i < x_sense.size(); ++i) {
+          for (unsigned int i = 0; i < x_sense.size(); ++i) {
             LandmarkObs obs;
             obs.x = x_sense[i];
             obs.y = y_sense[i];
