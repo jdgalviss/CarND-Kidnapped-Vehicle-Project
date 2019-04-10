@@ -11,6 +11,7 @@
 
 #include <string>
 #include <vector>
+#include <stdlib.h>     /* srand, rand */
 #include "helper_functions.h"
 
 struct Particle {
